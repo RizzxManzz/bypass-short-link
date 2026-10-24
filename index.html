@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Extractor & Bypass Tool</title>
+    <style>
+        /* CSS: Mengatur tampilan antarmuka (UI) agar bersih dan modern */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #121212; /* Tema Gelap */
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #1e1e1e;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+
+        p {
+            color: #aaa;
+            margin-bottom: 25px;
+            font-size: 0.9rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #333;
+            background-color: #2a2a2a;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 15px;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        input:focus {
+            border-color: #4CAF50;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+
+        .result-box {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+            text-align: left;
+            display: none; /* Disembunyikan sampai ada hasil */
+            word-wrap: break-word;
+        }
+
+        .result-box h3 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+
+        .result-box a {
+            color: #64B5F6;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .result-box a:hover {
+            text-decoration: underline;
+        }
+
+        .error-text {
+            color: #ff5252;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>URL Extractor</h1>
+        <p>Bypass shortlink dan temukan link tujuan (Mediafire, GDrive, dll).</p>
+
+        <!-- Elemen Input URL -->
+        <input type="url" id="urlInput" placeholder="Masukkan link safelink di sini (http://...)" required>
+        
+        <!-- Tombol Proses -->
+        <button id="extractBtn" onclick="mulaiEkstrak()">Ekstrak Link</button>
+
+        <!-- Tempat Menampilkan Pesan Error -->
+        <div id="errorText" class="error-text">Terjadi kesalahan saat mengekstrak.</div>
+
+        <!-- Tempat Menampilkan Hasil -->
+        <div id="resultBox" class="result-box">
+            <h3>Link Ditemukan:</h3>
+            <a id="finalLink" href="#" target="_blank">Akan muncul di sini</a>
+        </div>
+    </div>
+
+    <script>
+        /* JAVASCRIPT: Logika Pengambilan dan Pemrosesan Data HTML */
+        
+        async function mulaiEkstrak() {
+            const urlInput = document.getElementById('urlInput').value.trim();
+            const btn = document.getElementById('extractBtn');
+            const resultBox = document.getElementById('resultBox');
+            const finalLink = document.getElementById('finalLink');
+            const errorText = document.getElementById('errorText');
+
+            // Reset tampilan
+            resultBox.style.display = 'none';
+            errorText.style.display = 'none';
+
+            // Validasi Input
+            if (!urlInput || !urlInput.startsWith('http')) {
+                tampilkanError("Masukkan URL yang valid (dimulai dengan http/https).");
+                return;
+            }
+
+            // Ubah tombol menjadi mode loading
+            btn.textContent = "Sedang Mengekstrak...";
+            btn.disabled = true;
+
+            try {
+                // Menggunakan API AllOrigins untuk melewati pemblokiran CORS browser
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlInput)}`;
+                
+                const respon = await fetch(proxyUrl);
+                
+                if (!respon.ok) {
+                    throw new Error("Gagal mengambil data dari server.");
+                }
+
+                const data = await respon.json();
+                const kodeHtml = data.contents; // Ini adalah struktur HTML mentah dari web target
+
+                // Mengubah teks HTML menjadi dokumen yang bisa dicari elemennya (DOM Parsing)
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(kodeHtml, 'text/html');
+
+                // MENCARI LINK: Mengambil semua tag <a> di halaman tersebut
+                const semuaLink = doc.querySelectorAll('a');
+                let linkDitemukan = null;
+
+                // Kata kunci target (website tujuan yang ingin kita ambil)
+                // Anda bisa menambahkan kata kunci lain di dalam array ini
+                const targetDomains = ['mediafire.com', 'drive.google.com', 'mega.nz', 'zippyshare.com'];
+
+                // Periksa setiap link di halaman satu per satu
+                for (let i = 0; i < semuaLink.length; i++) {
+                    const tautan = semuaLink[i].getAttribute('href');
+                    
+                    if (tautan) {
+                        // Cek apakah tautan tersebut mengandung salah satu kata kunci domain target
+                        const cocok = targetDomains.some(domain => tautan.includes(domain));
+                        
+                        if (cocok) {
+                            linkDitemukan = tautan;
+                            break; // Hentikan pencarian jika sudah ketemu 1
+                        }
+                    }
+                }
+
+                // Menampilkan Hasil Output
+                if (linkDitemukan) {
+                    finalLink.href = linkDitemukan;
+                    finalLink.textContent = linkDitemukan;
+                    resultBox.style.display = 'block';
+                } else {
+                    tampilkanError("Tidak menemukan link tujuan (Mediafire/GDrive) di halaman ini. Format situs mungkin dienkripsi atau diproteksi.");
+                }
+
+            } catch (error) {
+                console.error("Error Detail:", error);
+                tampilkanError("Terjadi kesalahan jaringan atau situs memblokir permintaan kita.");
+            } finally {
+                // Kembalikan tombol ke keadaan semula
+                btn.textContent = "Ekstrak Link";
+                btn.disabled = false;
+            }
+        }
+
+        // Fungsi bantuan untuk menampilkan error
+        function tampilkanError(pesan) {
+            const errorText = document.getElementById('errorText');
+            errorText.textContent = pesan;
+            errorText.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
